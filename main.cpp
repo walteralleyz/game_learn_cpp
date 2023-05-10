@@ -1,41 +1,50 @@
+#include <iostream>
+#include <list>
 #include <SFML/Graphics.hpp>
-#include "./game_configs.hpp"
-#include "./playable.hpp"
+#include <SFML/Audio.hpp>
+#include "objects/objects.hpp"
+#include "scene.hpp"
 
 void wait_user_close(sf::RenderWindow &window);
-void wait_input(Player &player, int xpos);
+void wait_input(Objects::SpaceShip &ship);
+void create_lasers(std::list<Objects::Laser> &laser_list, Objects::SpaceShip &ship, sf::Sound &effect);
+std::list<Objects::Laser> laser_list(std::list<Objects::Laser> &laser_list);
+
+int laser_time = 0;
 
 int main() {
-    Player player;
+    Scene scene;
+    Objects::SpaceBackground background;
+    Objects::SpaceShip ship;
+    std::list<Objects::Laser> lasers;
+    sf::SoundBuffer sound_buffer;
+    sf::Sound sound;
 
-    int width = Configs::SCREEN_WIDTH;
-    int height = Configs::SCREEN_HEIGHT;
-    char* title = (char*) "Space Super Attack";
+    sound_buffer.loadFromFile("./assets/shoot.ogg");
+    sound.setBuffer(sound_buffer);
 
-    sf::RenderWindow window(sf::VideoMode(width, height), title);
-    sf::Clock clock;
+    while(scene.isOpen()) {
 
-    int a = 0;
-    double previous = clock.getElapsedTime().asMilliseconds();
-    double lag = 0.;
+        while(scene.is_lagging()) {
+            wait_user_close(scene);
+            wait_input(ship);
+            create_lasers(lasers, ship, sound);
 
-    while(window.isOpen()) {
-        double milli = sf::milliseconds(32).asMilliseconds();
-        double current = clock.getElapsedTime().asMilliseconds();
-        double elapsed = current - previous;
-        previous = current;
-        lag += elapsed;
-
-        while(lag >= milli) {
-            wait_user_close(window);
-            wait_input(player, a);
-
-            lag -= milli;
+            scene.compact_fps();
+            laser_time++;
         }
 
-        window.clear();
-        window.draw(player.get_sprite());
-        window.display();
+        lasers = laser_list(lasers);
+
+        scene.clear();
+        scene.draw(background.get_sprite());
+        scene.draw(ship.get_sprite());
+
+        for(Objects::Laser &laser : lasers) {
+            scene.draw(laser.get_sprite());
+        }
+
+        scene.display();
     }
 }
 
@@ -49,12 +58,49 @@ void wait_user_close(sf::RenderWindow &window) {
     }
 }
 
-void wait_input(Player &player, int xpos) {
+void wait_input(Objects::SpaceShip &ship) {
     if(sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-        player.move_right();
+        ship.move_right();
     }
 
     else if(sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-        player.move_left();
+        ship.move_left();
     }
+
+    else if(sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+        ship.move_forward();
+    }
+
+    else if(sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+        ship.move_back();
+    }
+}
+
+void create_lasers(std::list<Objects::Laser> &laser_list, Objects::SpaceShip &ship, sf::Sound &effect) {
+    for(Objects::Laser &laser : laser_list) {
+        laser.move_forward();
+    }
+
+    if(laser_time == 50) {
+        Objects::Laser laser(ship);
+
+        laser_list.push_front(laser);
+        effect.play();
+
+        laser_time = 0;
+    }
+}
+
+std::list<Objects::Laser> laser_list(std::list<Objects::Laser> &laser_list) {
+    std::list<Objects::Laser> temp;
+    
+    for(Objects::Laser laser : laser_list) {
+        if(!laser.should_destroy()) {
+            temp.push_back(laser);
+        }
+    }
+
+    laser_list.clear();
+
+    return temp;
 }
